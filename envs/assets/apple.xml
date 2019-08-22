@@ -1,0 +1,8 @@
+<mujoco model='applemodel'>
+    <compiler angle='degree' coordinate='local' inertiafromgeom='true'/>
+        <worldbody>
+            <body name='apple'>
+                <geom type='sphere' size='0.5' rgba='0.7 0.13 0.17 1'/>
+            </body>
+        </worldbody>
+</mujoco>
