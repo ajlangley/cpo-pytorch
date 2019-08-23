@@ -2,6 +2,7 @@ from collections import namedtuple
 from mujoco_py import load_model_from_path, MjSim, MjViewer
 from mujoco_py.generated.const import GEOM_SPHERE
 import numpy as np
+from numpy import pi as pi
 import tempfile
 import xml.etree.ElementTree as ET
 
@@ -20,8 +21,8 @@ Object = namedtuple('Object', 'type x y')
 class GatherEnv:
     @autoassign(exclude=('model_path'))
     def __init__(self, model_path, n_apples=8, n_bombs=8, apple_reward=1,
-                 bomb_cost=1, activity_range=6.0, catch_range=10, n_bins=8,
-                 robot_object_spacing=2.0, sensor_range=6.0, sensor_span=np.pi):
+                 bomb_cost=1, activity_range=6.0, catch_range=10, n_bins=10,
+                 robot_object_spacing=2.0, sensor_range=6.0, sensor_span=pi):
         self.viewer = None
 
         self.apples = []
@@ -74,6 +75,7 @@ class GatherEnv:
 
         self.apples = []
         self.bombs = []
+        obj_coords = []
 
         self._step_num = 0
 
@@ -86,7 +88,11 @@ class GatherEnv:
             if in_range(x, y, 0, 0, self.robot_object_spacing):
                 continue
 
+            if (x, y) in obj_coords:
+                continue
+
             self.apples.append(Object(APPLE, x, y))
+            obj_coords.append((x, y))
 
         while (len(self.bombs) < self.n_bombs):
             x, y = rand_coord(), rand_coord()
@@ -94,7 +100,11 @@ class GatherEnv:
             if in_range(x, y, 0, 0, self.robot_object_spacing):
                 continue
 
+            if (x, y) in obj_coords:
+                continue
+
             self.bombs.append(Object(BOMB, x, y))
+            obj_coords.append((x, y))
 
         return self._get_obs()
 
@@ -132,12 +142,15 @@ class GatherEnv:
         com = self.sim.data.subtree_com[idx].flat
         agent_x, agent_y = com[:2]
 
-        sort_key = lambda obj: euclidian_dist(obj.x, obj.y, agent_x, agent_y)
+        sort_key = lambda obj: -euclidian_dist(obj.x, obj.y, agent_x, agent_y)
         sorted_objs = sorted(self.apples + self.bombs, key=sort_key)
 
         bin_res = self.sensor_span / self.n_bins
+        half_span = self.sensor_span / 2
         orientation = self._get_orientation()
-        half_span = self.sensor_span * 0.5
+        # Standardize orientation to [0, 2pi] radians
+        standardize_radians = lambda x: (x + 2 * pi) % (2 * pi)
+        orientation = standardize_radians(orientation)
 
         for obj_x, obj_y, obj_type in sorted_objs:
             dist = euclidian_dist(obj_x, obj_y, agent_x, agent_y)
@@ -145,24 +158,35 @@ class GatherEnv:
             if dist > self.sensor_range:
                 continue
 
+            # Get the components of the vector from the agent to the object
+            x_comp = obj_x - agent_x
+            y_comp = obj_y - agent_y
+
+            # Get the angle of the vector relative to the agent's sensor range
+            angle = np.arctan2(y_comp, x_comp)
+            angle = standardize_radians(angle) - orientation
+
             angle = np.arctan2(obj_y - agent_y, obj_x - agent_x) - orientation
             angle = angle % (2 * np.pi)
 
-            if angle > np.pi:
-                angle = angle - 2 * np.pi
-            if angle < -np.pi:
-                angle = angle + 2 * np.pi
-
-            if np.abs(angle) > half_span:
+            # Skip if object is outside sensor span
+            if angle > half_span and angle < 2 * pi - half_span:
                 continue
 
-            bin_number = int((angle + half_span) / bin_res)
+            # Standardize angle to range [0, pi] to more easily find bin number
+            angle = standardize_radians(angle + pi / 2)
+            bin_number = int(angle / bin_res)
+
+            # The object is exactly on the upper bound of the sensor span
+            if bin_number == self.n_bins:
+                bin_number -= 1
+
             intensity = 1.0 - dist / self.sensor_range
 
             if obj_type == APPLE:
                 apple_readings[bin_number] = intensity
             else:
-                apple_readings[bin_number] = intensity
+                bomb_readings[bin_number] = intensity
 
         sensor_obs = np.concatenate([apple_readings, bomb_readings])
 

@@ -5,11 +5,12 @@ from envs.gather_env import GatherEnv
 
 class PointGatherEnv(GatherEnv):
     def __init__(self, n_apples=8, n_bombs=8, apple_reward=1, bomb_cost=1,
-                 activity_range=6.0, catch_range=1.0, robot_object_spacing=2.0,
-                 sensor_range=6.0, sensor_span=np.pi):
+                 activity_range=6.0, catch_range=1.0, n_bins=10,
+                 robot_object_spacing=2.0, sensor_range=6.0, sensor_span=np.pi):
         GatherEnv.__init__(self, 'envs/assets/point.xml', n_apples, n_bombs,
                            apple_reward, bomb_cost, activity_range, catch_range,
-                           robot_object_spacing, frame_skip)
+                           n_bins, robot_object_spacing, sensor_range,
+                           sensor_span)
 
     def step(self, action):
         self._do_simulation(action)
