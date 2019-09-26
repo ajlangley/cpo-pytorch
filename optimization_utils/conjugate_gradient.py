@@ -1,6 +1,6 @@
 import torch
 
-from torch_utils import get_device
+from torch_utils.torch_utils import get_device
 
 def cg_solver(Avp_fun, b, max_iter=10):
     '''

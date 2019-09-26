@@ -1,58 +1,63 @@
-from collections import defaultdict
-import gym
-from gym.spaces import Box, Discrete
+from collections import defaultdict, namedtuple
 import numpy as np
 import torch
 
-from memory import Memory
-from torch_utils import get_device
+from autoassign import autoassign
+from envs.ant_gather import AntGatherEnv
+from envs.point_gather import PointGatherEnv
+from memory import Memory, Trajectory
+from torch_utils.torch_utils import get_device
+
+
+def make_env(env_name, **env_args):
+    if env_name == 'ant-gather':
+        return PointGather(**env_args)
+    elif env_name == 'point-gather':
+        return PointGatherEnv(**env_args)
+    elif env_name == 'ant-circle':
+        raise NotImplementedError
 
 
 class Simulator:
-    def __init__(self, env_name, policy, n_trajectories, trajectory_len, state_filter=None,
-                **env_args):
-        self.env = np.asarray([gym.make(env_name, **env_args) for i in range(n_trajectories)])
+    @autoassign(exclude=('env_name', 'env_args'))
+    def __init__(self, env_name, policy, n_trajectories, trajectory_len, obs_filter=None, **env_args):
+        self.env = np.asarray([make_env(env_name, **env_args) for i in range(n_trajectories)])
+        self.n_trajectories = n_trajectories
 
         for env in self.env:
             env._max_episode_steps = trajectory_len
 
-        self.action_space = self.env[0].action_space
-        self.policy = policy
-        self.n_trajectories = n_trajectories
-        self.trajectory_len = trajectory_len
-        self.state_filter = state_filter
         self.device = get_device()
 
 
-class SinglePathSimulator(Simulator):
+class SinglePathSimulator:
     def __init__(self, env_name, policy, n_trajectories, trajectory_len, state_filter=None,
-                **env_args):
+                 **env_args):
         Simulator.__init__(self, env_name, policy, n_trajectories, trajectory_len, state_filter,
                            **env_args)
 
-    def sample_trajectories(self):
+    def run_sim(self):
         self.policy.eval()
 
         with torch.no_grad():
-            memory = np.asarray([defaultdict(list) for i in range(self.n_trajectories)])
-            done = [False] * self.n_trajectories
-            for trajectory in memory:
-                trajectory['done'] = False
+            trajectories = np.asarray([Trajectory() for i in range(self.n_trajectories)])
+            continue_mask = np.ones(self.n_trajectories)
 
-            for env, trajectory in zip(self.env, memory):
-                state = torch.tensor(env.reset()).float()
+            for env, trajectory in zip(self.env, trajectories):
+                obs = torch.tensor(env.reset()).float()
 
-                if self.state_filter:
-                    state = self.state_filter(state)
+                # Maybe batch this operation later
+                if self.obs_filter:
+                    obs = self.obs_filter(obs)
 
-                trajectory['states'].append(state)
+                trajectory.observations.append(obs)
 
-            while not np.all(done):
-                continue_mask = [i for i, trajectory in enumerate(memory) if not trajectory['done']]
-                trajs_to_update = [trajectory for trajectory in memory if not trajectory['done']]
-                continuing_envs = [env for i, env in enumerate(self.env) if i in continue_mask]
+            while np.any(continue_mask):
+                continue_indices = np.where(continue_mask)
+                trajs_to_update = trajectories[continue_indices]
+                continuing_envs = self.env[continue_indices]
 
-                policy_input = torch.stack([torch.tensor(trajectory['states'][-1]).to(self.device)
+                policy_input = torch.stack([torch.tensor(trajectory.observations[-1]).to(self.device)
                                             for trajectory in trajs_to_update])
 
                 action_dists = self.policy(policy_input)
@@ -60,21 +65,24 @@ class SinglePathSimulator(Simulator):
                 actions = actions.cpu()
 
                 for env, action, trajectory in zip(continuing_envs, actions, trajs_to_update):
-                    state, reward, done, info = env.step(action.numpy())
+                    obs, reward, trajectory.done, info = env.step(action.numpy())
 
-                    state = torch.tensor(state).float()
+                    obs = torch.tensor(obs).float()
                     reward = torch.tensor(reward, dtype=torch.float)
+                    cost = torch.tensor(info['constraint_cost'], dtype=torch.float)
 
-                    if self.state_filter:
-                        state = self.state_filter(state)
+                    if self.obs_filter:
+                        obs = self.obs_filter(obs)
 
-                    trajectory['actions'].append(action)
-                    trajectory['rewards'].append(reward)
-                    trajectory['done'] = done
+                    trajectory.actions.append(action)
+                    trajectory.rewards.append(reward)
+                    trajectory.costs.append(cost)
 
-                    if not done:
-                        trajectory['states'].append(state)
+                    if not trajectory.done:
+                        trajectory.observations.append(obs)
 
-                done = [trajectory['done'] for trajectory in memory]
+                continue_mask = np.asarray([1 - trajectory.done for trajectory in trajectories])
+
+        memory = Memory(trajectories)
 
         return memory

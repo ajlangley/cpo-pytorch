@@ -6,7 +6,7 @@ from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 
-from torch_utils import get_device
+from torch_utils.torch_utils import get_device
 
 
 class MultinomialLayer(Module):

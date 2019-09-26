@@ -1,5 +1,5 @@
 from collections import namedtuple
-from mujoco_py import load_model_from_path, MjSim, MjViewer
+from mujoco_py import load_model_from_xml, MjSim, MjViewer
 from mujoco_py.generated.const import GEOM_SPHERE
 import numpy as np
 from numpy import pi as pi
@@ -20,7 +20,7 @@ Object = namedtuple('Object', 'type x y')
 
 class GatherEnv:
     @autoassign(exclude=('model_path'))
-    def __init__(self, model_path, n_apples=8, n_bombs=8, apple_reward=1,
+    def __init__(self, model_path, n_apples=8, n_bombs=8, apple_reward=10,
                  bomb_cost=1, activity_range=6.0, catch_range=10, n_bins=10,
                  robot_object_spacing=2.0, sensor_range=6.0, sensor_span=pi):
         self.viewer = None
@@ -63,10 +63,8 @@ class GatherEnv:
                                pos=pos,
                                size=size))
 
-        # Write a new model with agent, walls, and floor included and load it again
-        _, temp_path = tempfile.mkstemp(suffix='.xml', text=True)
-        model_tree.write(temp_path)
-        model = load_model_from_path(temp_path)
+        model_xml = ET.tostring(model_tree.getroot(), encoding='unicode', method='xml')
+        model = load_model_from_xml(model_xml)
 
         return model
 
@@ -174,7 +172,7 @@ class GatherEnv:
                 continue
 
             # Standardize angle to range [0, pi] to more easily find bin number
-            angle = standardize_radians(angle + pi / 2)
+            angle = standardize_radians(angle + half_span)
             bin_number = int(angle / bin_res)
 
             # The object is exactly on the upper bound of the sensor span

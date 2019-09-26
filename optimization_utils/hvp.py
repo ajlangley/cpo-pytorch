@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import grad
 
-from torch_utils import flat_grad
+from torch_utils.torch_utils import flat_grad
 
 def get_Hvp_fun(functional_output, inputs, damping_coef=0.0):
     '''
