@@ -4,7 +4,7 @@ from envs.gather_env import GatherEnv
 
 
 class PointGatherEnv(GatherEnv):
-    def __init__(self, n_apples=8, n_bombs=8, apple_reward=1, bomb_cost=1,
+    def __init__(self, n_apples=8, n_bombs=8, apple_reward=10, bomb_cost=1,
                  activity_range=6.0, catch_range=1.0, n_bins=10,
                  robot_object_spacing=2.0, sensor_range=6.0, sensor_span=np.pi):
         GatherEnv.__init__(self, 'envs/assets/point.xml', n_apples, n_bombs,
@@ -16,8 +16,8 @@ class PointGatherEnv(GatherEnv):
         self._do_simulation(action)
         n_apples, n_bombs = self._update_objects()
 
-        reward = n_apples * self.apple_reward - self._unhealthy_cost()
         cost = n_bombs * self.bomb_cost
+        reward = n_apples * self.apple_reward - cost
         info = dict(reward=reward, constraint_cost=cost)
 
         self._step_num += 1
@@ -51,6 +51,3 @@ class PointGatherEnv(GatherEnv):
 
     def _is_done(self):
         return self._max_episode_steps and self._step_num >= self._max_episode_steps
-
-    def _unhealthy_cost(self):
-        return 0.0

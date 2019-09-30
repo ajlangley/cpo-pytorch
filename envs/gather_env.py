@@ -150,7 +150,7 @@ class GatherEnv:
         standardize_radians = lambda x: (x + 2 * pi) % (2 * pi)
         orientation = standardize_radians(orientation)
 
-        for obj_x, obj_y, obj_type in sorted_objs:
+        for obj_type, obj_x, obj_y in sorted_objs:
             dist = euclidian_dist(obj_x, obj_y, agent_x, agent_y)
 
             if dist > self.sensor_range:
@@ -162,10 +162,7 @@ class GatherEnv:
 
             # Get the angle of the vector relative to the agent's sensor range
             angle = np.arctan2(y_comp, x_comp)
-            angle = standardize_radians(angle) - orientation
-
-            angle = np.arctan2(obj_y - agent_y, obj_x - agent_x) - orientation
-            angle = angle % (2 * np.pi)
+            angle = standardize_radians(angle - orientation)
 
             # Skip if object is outside sensor span
             if angle > half_span and angle < 2 * pi - half_span:

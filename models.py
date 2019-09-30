@@ -116,8 +116,6 @@ def build_mlp(input_dim, hidden_dims, output_dim):
     '''
 
     mlp = Sequential(*build_layers(input_dim, hidden_dims, output_dim))
-    mlp[-1].weight.data *= 0.1
-    mlp[-1].bias.data *= 0.0
 
     return mlp
 
@@ -152,35 +150,6 @@ def build_diag_gauss_policy(state_dim, hidden_dims, action_dim,
     layers[-1].weight.data *= 0.1
     layers[-1].bias.data *= 0.0
     layers.append(DiagGaussianLayer(action_dim, log_std))
-    policy = Sequential(*layers)
-
-    return policy
-
-def build_multinomial_policy(state_dim, hidden_dims, action_dim):
-    '''
-    Build a multilayer perceptron with a DiagGaussianLayer at the output layer
-
-    Parameters
-    ----------
-    state_dim : int
-        the input size of the network
-
-    hidden_dims : list
-        a list of type int specifying the sizes of the hidden layers
-
-    action_dim : int
-        the dimensionality of the Gaussian distribution to be outputted by the
-        policy
-
-    Returns
-    -------
-    policy : torch.nn.Sequential
-        a pytorch sequential model that outputs a multinomial distribution
-    '''
-
-    layers = build_layers(state_dim, hidden_dims, action_dim)
-    layers.append(LogSoftmax(dim=-1))
-    layers.append(MultinomialLayer())
     policy = Sequential(*layers)
 
     return policy
