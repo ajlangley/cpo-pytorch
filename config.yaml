@@ -1,0 +1,29 @@
+# Global project settings
+
+session_save_dir: "saved-sessions"
+
+# Mujoco environment settings
+
+mujoco_defaults: &mujoco_defaults
+    policy_hidden_dims: [64, 64]
+    vf_hidden_dims: [64, 64]
+    cf_hidden_dims: [64, 64]
+
+    max_timesteps: 1000
+    n_episodes: 250
+    n_trajectories: 100
+
+gather_env_defaults: &gather_env_defaults
+    max_constraint_val: 0.1
+    bias_red_cost: 1.0
+
+point_gather:
+    env_name: point_gather
+
+    <<: *mujoco_defaults
+    <<: *gather_env_defaults
+
+    state_dim: 29
+    action_dim: 2
+    max_timesteps: 16
+    n_trajectories: 10000

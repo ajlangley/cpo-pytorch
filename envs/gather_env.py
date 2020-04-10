@@ -7,7 +7,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 from autoassign import autoassign
-from envs.mujoco_utils import euclidian_dist, in_range
+from envs.mujoco_utils import euclidian_dist, in_range, std_radians
 
 APPLE = 0
 BOMB = 1
@@ -77,13 +77,15 @@ class GatherEnv:
 
         self._step_num = 0
 
+        agent_x_pos, agent_y_pos = self.sim.data.qpos[0], self.sim.data.qpos[1]
+
         rand_coord = lambda: np.random.randint(-self.activity_range, self.activity_range)
 
         while (len(self.apples) < self.n_apples):
             x, y = rand_coord(), rand_coord()
 
             # Change this later to make (0, 0) the position of the agent
-            if in_range(x, y, 0, 0, self.robot_object_spacing):
+            if in_range(x, y, agent_x_pos, agent_y_pos, self.robot_object_spacing):
                 continue
 
             if (x, y) in obj_coords:
@@ -145,10 +147,7 @@ class GatherEnv:
 
         bin_res = self.sensor_span / self.n_bins
         half_span = self.sensor_span / 2
-        orientation = self._get_orientation()
-        # Standardize orientation to [0, 2pi] radians
-        standardize_radians = lambda x: (x + 2 * pi) % (2 * pi)
-        orientation = standardize_radians(orientation)
+        orientation = std_radians(self._get_orientation())
 
         for obj_type, obj_x, obj_y in sorted_objs:
             dist = euclidian_dist(obj_x, obj_y, agent_x, agent_y)
@@ -157,23 +156,19 @@ class GatherEnv:
                 continue
 
             # Get the components of the vector from the agent to the object
-            x_comp = obj_x - agent_x
-            y_comp = obj_y - agent_y
+            x_delta = obj_x - agent_x
+            y_delta = obj_y - agent_y
 
             # Get the angle of the vector relative to the agent's sensor range
-            angle = np.arctan2(y_comp, x_comp)
-            angle = standardize_radians(angle - orientation)
+            angle = np.arctan2(y_delta, x_delta)
+            angle = std_radians(angle - orientation + half_span)
 
-            # Skip if object is outside sensor span
-            if angle > half_span and angle < 2 * pi - half_span:
+            if angle > self.sensor_span:
                 continue
 
-            # Standardize angle to range [0, pi] to more easily find bin number
-            angle = standardize_radians(angle + half_span)
             bin_number = int(angle / bin_res)
 
-            # The object is exactly on the upper bound of the sensor span
-            if bin_number == self.n_bins:
+            if bin_number == int(angle / bin_res):
                 bin_number -= 1
 
             intensity = 1.0 - dist / self.sensor_range
@@ -186,6 +181,42 @@ class GatherEnv:
         sensor_obs = np.concatenate([apple_readings, bomb_readings])
 
         return sensor_obs
+
+        #     dist = euclidian_dist(obj_x, obj_y, agent_x, agent_y)
+        #
+        #     if dist > self.sensor_range:
+        #         continue
+        #
+        #     # Get the components of the vector from the agent to the object
+        #     x_comp = obj_x - agent_x
+        #     y_comp = obj_y - agent_y
+        #
+        #     # Get the angle of the vector relative to the agent's sensor range
+        #     angle = np.arctan2(y_comp, x_comp)
+        #     angle = standardize_radians(angle - orientation)
+        #
+        #     # Skip if object is outside sensor span
+        #     if angle > half_span and angle < 2 * pi - half_span:
+        #         continue
+        #
+        #     # Standardize angle to range [0, pi] to more easily find bin number
+        #     angle = standardize_radians(angle + half_span)
+        #     bin_number = int(angle / bin_res)
+        #
+        #     # The object is exactly on the upper bound of the sensor span
+        #     if bin_number == self.n_bins:
+        #         bin_number -= 1
+        #
+        #     intensity = 1.0 - dist / self.sensor_range
+        #
+        #     if obj_type == APPLE:
+        #         apple_readings[bin_number] = intensity
+        #     else:
+        #         bomb_readings[bin_number] = intensity
+        #
+        # sensor_obs = np.concatenate([apple_readings, bomb_readings])
+        #
+        # return sensor_obs
 
     def _get_obs(self):
         return np.concatenate([self._get_self_obs(), self._get_sensor_obs()])

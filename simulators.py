@@ -10,11 +10,11 @@ from torch_utils.torch_utils import get_device
 
 
 def make_env(env_name, **env_args):
-    if env_name == 'ant-gather':
+    if env_name == 'ant_gather':
         return PointGather(**env_args)
-    elif env_name == 'point-gather':
+    elif env_name == 'point_gather':
         return PointGatherEnv(**env_args)
-    elif env_name == 'ant-circle':
+    else:
         raise NotImplementedError
 
 
